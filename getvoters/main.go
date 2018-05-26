@@ -55,7 +55,7 @@ type Voters map[string]*VoterData
 
 // User-defined variables
 var dbUser, dbPass, dbName, dbHost, dbPort, dbConn string
-var listenAddr, urlPattern, urlParam string
+var listenAddr, urlTotals, urlVoters, urlParam string
 var defaultPool, donationKey string
 var db *sql.DB
 
@@ -85,8 +85,11 @@ func init() {
 	flag.StringVar(&listenAddr, "listen", "0.0.0.0:8080",
 		"Address (host:port) to listen for requests")
 
-	flag.StringVar(&urlPattern, "url", "/voters",
-		"URL pattern to expect in the default HTTP request multiplexer")
+	flag.StringVar(&urlTotals, "totals", "/totals",
+		"URL pattern in the default HTTP request multiplexer to get the totals")
+
+	flag.StringVar(&urlVoters, "voters", "/voters",
+		"URL pattern in the default HTTP request multiplexer to get the voters list")
 
 	flag.StringVar(&urlParam, "param", "pool",
 		"Parameter to expect in the HTTP GET request URL (example: <URL>?pool=<ADDR>)")
@@ -121,8 +124,8 @@ func main() {
 	defer db.Close()
 
 	// Set the function to handle requests and start server
-	http.HandleFunc("/", getTotals)
-	http.HandleFunc(urlPattern, getVoters)
+	http.HandleFunc(urlTotals, getTotals)
+	http.HandleFunc(urlVoters, getVoters)
 	log.Fatal(http.ListenAndServe(listenAddr, nil))
 }
 
@@ -168,12 +171,16 @@ func getTotals(w http.ResponseWriter, r *http.Request) {
 	err := db.QueryRow(VOTERS_NUMBER_QUERY, pool).Scan(&voters)
 	if err != nil {
 		log.Println("ERROR getting the number of voters: " + err.Error())
+		http.Error(w, "500 internal server error", 500)
+		return
 	}
 	err = db.QueryRow(TOTAL_VOTES_QUERY, pool).Scan(&votes)
 	if err != nil {
 		log.Println("ERROR getting the total of votes: " + err.Error())
+		http.Error(w, "500 internal server error", 500)
+		return
 	}
-	log.Println("voters", voters, "votes", votes)
+	
 	writeJSON(w, &Digest{Pool: pool, Voters: voters, Votes: votes}, false)
 }
 
