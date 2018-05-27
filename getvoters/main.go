@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"net/http"
 	"database/sql"
-	"compress/gzip"
 	"encoding/json"
 	"encoding/base64"
 	_ "github.com/lib/pq"
@@ -23,6 +22,10 @@ FROM accounts WHERE inflationdest = $1`
 
 const TOTAL_VOTES_QUERY = `SELECT SUM(balance)
 FROM accounts WHERE inflationdest = $1`
+
+// JSON indent strings (https://golang.org/pkg/encoding/json/#Encoder.SetIndent)
+const JSON_INDENT_PREFIX = ""
+const JSON_INDENT_INDENT = ""
 
 // Data structure for the main page JSON
 type Digest struct {
@@ -95,7 +98,8 @@ func init() {
 		"Parameter to expect in the HTTP GET request URL (example: <URL>?pool=<ADDR>)")
 
 	// Stellar flags
-	flag.StringVar(&defaultPool, "pool", "GCCD6AJOYZCUAQLX32ZJF2MKFFAUJ53PVCFQI3RHWKL3V47QYE2BNAUT",
+	flag.StringVar(&defaultPool, "pool",
+		"GCCD6AJOYZCUAQLX32ZJF2MKFFAUJ53PVCFQI3RHWKL3V47QYE2BNAUT",
 		"Default inflationdest address to use")
 
 	flag.StringVar(&donationKey, "key", "lumenaut.net donation%",
@@ -138,18 +142,15 @@ func poolFromParam(r *http.Request) string {
 	return pool
 }
 
-func writeJSON(w http.ResponseWriter, data interface{}, compress bool) {
+func writeJSON(w http.ResponseWriter, data interface{}) {
 	// Inform the user of the content-type in the header
 	w.Header().Set("Content-Type", "application/json")
-	if compress {
-		w.Header().Set("Content-Encoding", "gzip")
-	}
 
 	// Set up the compressing/encoding pipeline
 	js := json.NewEncoder(w)
-	if compress {
-		js = json.NewEncoder(gzip.NewWriter(w))
-	}
+
+	// Set the JSON indentation strings
+	js.SetIndent(JSON_INDENT_PREFIX, JSON_INDENT_INDENT)
 
 	// Marshal data as JSON and send to w
 	err := js.Encode(data)
@@ -180,8 +181,8 @@ func getTotals(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "500 internal server error", 500)
 		return
 	}
-	
-	writeJSON(w, &Digest{Pool: pool, Voters: voters, Votes: votes}, false)
+
+	writeJSON(w, &Digest{Pool: pool, Voters: voters, Votes: votes})
 }
 
 func getVoters(w http.ResponseWriter, r *http.Request) {
@@ -215,7 +216,7 @@ func getVoters(w http.ResponseWriter, r *http.Request) {
 		vl.Entries = append(vl.Entries, entry)
 	}
 
-	writeJSON(w, &vl, true)
+	writeJSON(w, &vl)
 }
 
 func getVotersDB(pool string) (Voters, error) {
