@@ -1,0 +1,7 @@
+package: github.com/matheusb-comp/go/pool/watcher
+import:
+- package: github.com/stellar/go
+  subpackages:
+  - clients/horizon
+ignore:
+- github.com/matheusb-comp/go/pool/getvoters
