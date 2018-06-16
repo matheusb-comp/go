@@ -1,0 +1,77 @@
+hash: 0e1976b25dd8c11750137c30258312ebbe0eb8c31de5b1537072942085025590
+updated: 2018-06-12T19:20:45.479887672-03:00
+imports:
+- name: github.com/agl/ed25519
+  version: 278e1ec8e8a6e017cd07577924d6766039146ced
+  repo: https://github.com/agl/ed25519
+  subpackages:
+  - edwards25519
+- name: github.com/davecgh/go-spew
+  version: 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
+  repo: https://github.com/davecgh/go-spew
+  subpackages:
+  - spew
+- name: github.com/go-errors/errors
+  version: a41850380601eeb43f4350f7d17c6bbd8944aaf8
+  repo: https://github.com/go-errors/errors
+- name: github.com/lib/pq
+  version: 50761b0867bd1d9d069276790bcd4a3bccf2324a
+  repo: https://github.com/lib/pq
+  subpackages:
+  - oid
+- name: github.com/manucorporat/sse
+  version: ee05b128a739a0fb76c7ebd3ae4810c1de808d6d
+  repo: https://github.com/manucorporat/sse
+- name: github.com/nullstyle/go-xdr
+  version: a875e7c9fa2388ce03279f6b5ba1c2ccd1f9e917
+  repo: https://github.com/nullstyle/go-xdr
+  subpackages:
+  - xdr3
+- name: github.com/pkg/errors
+  version: 645ef00459ed84a119197bfb8d8205042c6df63d
+  repo: https://github.com/pkg/errors
+- name: github.com/pmezard/go-difflib
+  version: 792786c7400a136282c1664665ae0a8db921c6c2
+  repo: https://github.com/pmezard/go-difflib
+  subpackages:
+  - difflib
+- name: github.com/segmentio/go-loggly
+  version: eb91657e62b25699dd4e84d5562735440d4beace
+  repo: https://github.com/segmentio/go-loggly
+- name: github.com/sirupsen/logrus
+  version: 68cec9f21fbf3ea8d8f98c044bc6ce05f17b267a
+  repo: https://github.com/sirupsen/logrus
+  subpackages:
+  - hooks/test
+- name: github.com/stellar/go
+  version: 2289b703d6369180b6896e23349a2ce3f053c9f6
+  subpackages:
+  - amount
+  - build
+  - clients/horizon
+  - crc16
+  - hash
+  - keypair
+  - network
+  - price
+  - strkey
+  - support/errors
+  - support/http/mutil
+  - support/log
+  - support/render/problem
+  - xdr
+- name: github.com/stretchr/objx
+  version: 1a9d0bb9f541897e62256577b352fdbc1fb4fd94
+  repo: https://github.com/stretchr/objx
+- name: github.com/stretchr/testify
+  version: 976c720a22c8eb4eb6a0b4348ad85ad12491a506
+  repo: https://github.com/stretchr/testify
+  subpackages:
+  - assert
+  - mock
+  - require
+- name: golang.org/x/sys
+  version: bff228c7b664c5fce602223a05fb708fd8654986
+  subpackages:
+  - unix
+testImports: []
