@@ -1,5 +1,5 @@
-hash: 0e1976b25dd8c11750137c30258312ebbe0eb8c31de5b1537072942085025590
-updated: 2018-06-12T19:20:45.479887672-03:00
+hash: d4697c34cbcd94b9accaf7623fc89543a0ac9f33a68dc7e6ca4c612b0c11b5fd
+updated: 2018-06-17T13:40:31.32234417-03:00
 imports:
 - name: github.com/agl/ed25519
   version: 278e1ec8e8a6e017cd07577924d6766039146ced
@@ -14,14 +14,19 @@ imports:
 - name: github.com/go-errors/errors
   version: a41850380601eeb43f4350f7d17c6bbd8944aaf8
   repo: https://github.com/go-errors/errors
+- name: github.com/jtacoma/uritemplates
+  version: 307ae868f90f4ee1b73ebe4596e0394237dacce8
 - name: github.com/lib/pq
   version: 50761b0867bd1d9d069276790bcd4a3bccf2324a
-  repo: https://github.com/lib/pq
   subpackages:
   - oid
 - name: github.com/manucorporat/sse
   version: ee05b128a739a0fb76c7ebd3ae4810c1de808d6d
   repo: https://github.com/manucorporat/sse
+- name: github.com/matheusb-comp/go
+  version: 080b316607a3f301d31e5f0021362167100bd6c4
+  subpackages:
+  - pool/getvoters
 - name: github.com/nullstyle/go-xdr
   version: a875e7c9fa2388ce03279f6b5ba1c2ccd1f9e917
   repo: https://github.com/nullstyle/go-xdr
@@ -44,7 +49,7 @@ imports:
   subpackages:
   - hooks/test
 - name: github.com/stellar/go
-  version: 2289b703d6369180b6896e23349a2ce3f053c9f6
+  version: c5626e1efe0850e4bf065dc530091a68dfdefd29
   subpackages:
   - amount
   - build
@@ -71,7 +76,7 @@ imports:
   - mock
   - require
 - name: golang.org/x/sys
-  version: bff228c7b664c5fce602223a05fb708fd8654986
+  version: 6c888cc515d3ed83fc103cf1d84468aad274b0a7
   subpackages:
   - unix
 testImports: []
