@@ -14,11 +14,9 @@ import (
   "github.com/jtacoma/uritemplates"
   "github.com/stellar/go/clients/horizon"
   "github.com/matheusb-comp/go/pool/getvoters"
-
-  // TODO: Remove
-  "math/rand"
 )
 
+// Needed because clients/horizon currently doesn't provide effects streaming
 type Effect struct {
   // Base
 	Links struct {
@@ -26,54 +24,55 @@ type Effect struct {
 		Succeeds  horizon.Link `json:"succeeds"`
 		Precedes  horizon.Link `json:"precedes"`
 	} `json:"_links"`
-
 	ID        string `json:"id"`
 	PT        string `json:"paging_token"`
 	Account   string `json:"account"`
 	Type      string `json:"type"`
 	TypeI     int32  `json:"type_i"`
 	CreatedAt string `json:"created_at"`
-
   // Asset
   AssetType string `json:"asset_type"`
 	AssetCode string `json:"asset_code,omitempty"`
 	Issuer    string `json:"asset_issuer,omitempty"`
-
   // AccountCredited and AccountDebited
   Amount string `json:"amount"`
 }
-
-type Page struct {
+type EffectsPage struct {
 	Links struct {
 		Self horizon.Link `json:"self"`
 		Next horizon.Link `json:"next"`
 		Prev horizon.Link `json:"prev"`
 	} `json:"_links"`
-
 	Embedded struct {
     Records []Effect `json:"records"`
 	} `json:"_embedded"`
 }
 
-type FileData struct {
-  Name string
-  Data interface{}
+// Current state to be saved in a file in case of error
+type State struct {
+  Cursor string
+  TotalCoins string
+  Error string
+  Snapshot *getvoters.Data
+}
+
+// Used to create the final JSON file with all the inflation information
+type InflationData struct {
+  Ledger int32
+  Address string
+  Credit string
+  Snapshot *getvoters.Data
 }
 
 // Parameters to apply when parsing a templated Stellar URI
 const DEFAULT_TEMPLATE_CURSOR = ""
 const DEFAULT_TEMPLATE_ORDER = "asc"
-const DEFAULT_TEMPLATE_LIMIT = 200
+const DEFAULT_TEMPLATE_LIMIT = 2
 var templateParams = map[string]interface{}{
   "cursor": DEFAULT_TEMPLATE_CURSOR,
   "order": DEFAULT_TEMPLATE_ORDER,
   "limit": DEFAULT_TEMPLATE_LIMIT,
 }
-// Current state, updated every ledger, saved in a file in case of error
-var curr = struct {
-  cursor string     `json:"paging_token"`
-  totalCoins string `json:"total_coins"`
-}{"", ""}
 
 // User-defined variables
 var dbUser, dbPass, dbName, dbHost, dbPort, dbConn string
@@ -85,6 +84,8 @@ var conn *getvoters.DBconn
 var ctx context.Context
 // Cancel function to stop the stream
 var cancel context.CancelFunc
+// Current state, updated every ledger
+var curr State
 
 func init() {
 	// Database flags
@@ -129,22 +130,12 @@ func init() {
 }
 
 func main() {
+  var err error
   flag.Parse()
 
-  // Set the horizon network
-  client := horizon.DefaultTestNetClient
-	//client := horizon.DefaultPublicNetClient
-  // Set Horizon to local URL
+  // Set the horizon network client and URL
+	client := horizon.DefaultPublicNetClient
 	client.URL = horizonURL
-
-  // Get the current state from the file, or start streaming from 'now'
-  err := readFileJSON(errorFile, &curr)
-  if err != nil {
-    curr.totalCoins = ""
-    curr.cursor = "now"
-  }
-  // Prepare the context and cancel function
-  ctx, cancel = context.WithCancel(context.Background())
 
   // Create a connection string only if one was not supplied
 	dbString := dbConn
@@ -157,59 +148,73 @@ func main() {
 	}
   // Setup the database connection to get the voters
   conn, err = getvoters.NewDBconn(dbString, defaultPool, donationKey)
-  checkFatal("Create new DBconn", err)
+  checkFatal("Create new DBconn", err, nil)
   defer conn.Close()
 
+  // Get the current state from the file, or stream from 'now'
+  err = readFileJSON(errorFile, &curr)
+  if err != nil {
+    curr.TotalCoins = ""
+    curr.Cursor = "now"
+  }
+
+  // Prepare the context and cancel function
+  ctx, cancel = context.WithCancel(context.Background())
+
   // -- STREAM START --
-  c := horizon.Cursor(curr.cursor)
+  c := horizon.Cursor(curr.Cursor)
   err = client.StreamLedgers(ctx, &c, handleLedger)
-  checkFatal("Stream Ledgers", err, FileData{errorFile, &curr})
+  checkFatal("Stream Ledgers", err, &curr)
 }
 
+// TODO: Remove - Simulate a change in TotalCoins
+var counter int
 func handleLedger(l horizon.Ledger) {
   // TODO: Remove - Simulate a change in TotalCoins
-  fmt.Println("Got:", l.Sequence)
-  if rand.Intn(3) == 0 {
+  counter++
+  if counter > 3 {
     fmt.Println("RANDOM! Changing curr.totalCoins to 1")
-    curr.totalCoins = "1"
+    curr.TotalCoins = "1"
   }
   // END-Remove
+  var err error
 
-  // Update the current state (cursor and totalCoins)
-  curr.cursor = l.PT
-  // Do nothing if there is no change in Ledger.TotalCoins (no inflation yet)
-  if l.TotalCoins == curr.totalCoins || curr.totalCoins == "" {
-    fmt.Println("Got in the if:", curr.totalCoins, l.TotalCoins)
-    curr.totalCoins = l.TotalCoins
+  // When inflation happens, the Ledger.TotalCoins changes
+  fmt.Println("Checking ledger", l.Sequence)
+  if l.TotalCoins == curr.TotalCoins || curr.TotalCoins == "" {
+    // Update the current state (cursor and totalCoins)
+    curr.Cursor = l.PT
+    curr.TotalCoins = l.TotalCoins
+    // No inflation yet, ignore this ledger
     return
   }
   // We got inflation! -- STREAM END --
+  fmt.Println("Inflation!")
   if cancel != nil {
     cancel()
   }
 
   // Get the voters snapshot, or save the cursor in case of error
-  data, err := conn.GetVoters()
-  checkFatal("GetVoters", err, FileData{errorFile, &curr})
-
-  fmt.Println("Count:", data.NumVoters, "Sum:", data.NumVotes)
+  curr.Snapshot, err = conn.GetVoters()
+  checkFatal("GetVoters", err, &curr)
+  fmt.Println("Voters:", curr.Snapshot.NumVoters, "- Votes:", curr.Snapshot.NumVotes)
 
   // Extract the effects URL for this ledger (with the params applied)
   effectsURL := l.Links.Effects.Href
   if l.Links.Effects.Templated {
     template, err := uritemplates.Parse(effectsURL)
-    checkFatal("Template parse", err, []FileData{{errorFile, &curr}, {votersFile, &data}}...)
+    checkFatal("Template parse", err, &curr)
     effectsURL, err = template.Expand(templateParams)
-    checkFatal("Template expand", err, []FileData{{errorFile, &curr}, {votersFile, &data}}...)
+    checkFatal("Template expand", err, &curr)
   }
 
   // Loop the pages until Records is an empty slice
   var credit string
   LoopPages:
     for {
-      var page Page
+      var page EffectsPage
       err = getJSON(effectsURL, &page)
-      checkFatal("GET " + effectsURL, err, []FileData{{errorFile, &curr}, {votersFile, &data}}...)
+      checkFatal("GET " + effectsURL, err, &curr)
 
       // Stop (get out of for) if the page has no effects
       if len(page.Embedded.Records) <= 0 {
@@ -218,8 +223,7 @@ func handleLedger(l horizon.Ledger) {
 
       // Check the page for typeI 2 (account_credited)
       for _, effect := range page.Embedded.Records {
-        //if effect.TypeI == 2 && effect.Account == defaultPool {
-        if effect.TypeI == 2 {
+        if effect.TypeI == 2 && effect.Account == defaultPool {
           credit = effect.Amount
           // TODO: Decide - We break after finding the first credit?
           break LoopPages
@@ -229,41 +233,28 @@ func handleLedger(l horizon.Ledger) {
       // Get the next page
       effectsURL = page.Links.Next.Href
     }
+  fmt.Println("Stroops received:", credit)
 
   // TODO: Print the final file in a better way
-  err = writeFileJSON(votersFile, struct{
-    Ledger int32
-    Credit string
-    Snapshot *getvoters.Data
-  }{l.Sequence, strings.Replace(credit, ".", "", 1), data})
-  checkFatal("Write " + votersFile, err, []FileData{{errorFile, &curr}, {votersFile, &data}}...)
-}
-
-func handleEffects(page *Page) {
-  //log.Println("Got", len(page.Embedded.Records), "effects!")
-  for _, effect := range page.Embedded.Records {
-    // TypeI 2 is Type "account_credited"
-    if effect.TypeI != 2 {
-      continue
-    }
-
-    // effect is an account_credited
-    fmt.Println("Effect type", effect.Type, "! ID:", effect.ID)
-    fmt.Println("Account:", effect.Account)
-    fmt.Println("Asset:", effect.AssetType, effect.AssetCode)
-    fmt.Println("Amount:", effect.Amount)
-  }
+  err = writeFileJSON(votersFile, InflationData{
+    l.Sequence,
+    defaultPool,
+    strings.Replace(credit, ".", "", 1),
+    curr.Snapshot})
+  checkFatal("Write " + votersFile, err, &curr)
+  // Everything went ok, we have a functional snapshot!
+  fmt.Println("Inflation snapshot successfully saved in", votersFile)
 }
 
 // Log the fatal error, save all the data in files, and exit (OS.Exit(1))
-func checkFatal(msg string, err error, files ...FileData) {
+func checkFatal(msg string, err error, state *State) {
   if err != nil {
-    // Save each piece of data received in a different file
-    for _, f := range files {
-      err = writeFileJSON(f.Name, f.Data)
+    if state != nil {
+      state.Error = msg + ": " + err.Error()
+      err = writeFileJSON(errorFile, state)
       if err != nil {
-        log.Println("### ERROR SAVING " + f.Name + " ###")
-        log.Println(f.Data)
+        log.Println("### ERROR SAVING " + errorFile + " ###")
+        log.Println(state)
         log.Println("######")
       }
     }
@@ -320,28 +311,3 @@ func readJSON(r io.Reader, data interface{}) error {
   // Everything worked, return nil
   return nil
 }
-
-// [DEPRECATED] Function to substitute the HAL templated URI (RFC 6570)
-// Using now a more general library github.com/jtacoma/uritemplates
-// func convert(s string, cur string, lim int, asc bool) string {
-//   // Set the URL query parameters (?arg1=v1&arg2=v2...)
-//   param := "?order="
-//   if asc {
-//     param += "asc&"
-//   } else {
-//     param += "desc&"
-//   }
-//   if lim > 0 {
-//     param += "limit=" + strconv.Itoa(lim) + "&"
-//   }
-//   if cur != "" {
-//     param += "cursor=" + cur
-//   } else {
-//     // Remove trailing '&'
-//     param = string(param[:len(param)-1])
-//   }
-//   // Regular expression to get the template ({?cursor,limit,order})
-//   re := regexp.MustCompile("\\{\\?[a-z,]+\\}")
-//   // Replace the template with the set URL query parameters
-// 	return re.ReplaceAllLiteralString(s, param)
-// }
